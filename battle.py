@@ -35,6 +35,7 @@ class Pokemon:
 @dataclass
 class BattleResult:
     winner: str | None  # None means draw/stalemate
+    winner_idx: int | None  # 0 = first Pokemon, 1 = second, None = draw (safe for mirror matches)
     turns: int
     hp_left_pct: float  # winner's remaining HP as a fraction of max
     history: list[tuple[int, int]] = field(default_factory=list)  # (hp_a, hp_b) per turn
@@ -70,11 +71,9 @@ def calc_damage(attacker: Pokemon, defender: Pokemon, chart: TypeChart, rng: ran
 
 
 def simulate_battle(a: Pokemon, b: Pokemon, chart: TypeChart, rng: random.Random) -> BattleResult:
-    hp = {a.name: a.hp, b.name: b.hp}
     history = [(a.hp, b.hp)]
     turns = 0
-    # if both share a name (mirror match) fall back to index-based tracking
-    fighters = [a, b]
+    fighters = [a, b]  # tracked by index so mirror matches (same name) work
     hps = [a.hp, b.hp]
 
     while turns < MAX_TURNS and hps[0] > 0 and hps[1] > 0:
@@ -93,9 +92,9 @@ def simulate_battle(a: Pokemon, b: Pokemon, chart: TypeChart, rng: random.Random
         history.append((hps[0], hps[1]))
 
     if hps[0] > 0 and hps[1] > 0:
-        return BattleResult(None, turns, 0.0, history)
+        return BattleResult(None, None, turns, 0.0, history)
     w = 0 if hps[0] > 0 else 1
-    return BattleResult(fighters[w].name, turns, hps[w] / fighters[w].hp, history)
+    return BattleResult(fighters[w].name, w, turns, hps[w] / fighters[w].hp, history)
 
 
 @dataclass
@@ -123,9 +122,9 @@ def run_simulations(a: Pokemon, b: Pokemon, chart: TypeChart,
         if k == 0:
             sample = r.history
         turns.append(r.turns)
-        if r.winner is None:
+        if r.winner_idx is None:
             draws += 1
-        elif r.winner == a.name and (r.history[-1][0] > 0):
+        elif r.winner_idx == 0:
             wins_a += 1
             left_a.append(r.hp_left_pct)
         else:

@@ -13,6 +13,7 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
 
 import data
+import predictor
 from battle import run_simulations
 from visualize import make_figure
 
@@ -61,7 +62,15 @@ class App(tk.Tk):
             messagebox.showerror("Error", f"Could not load Pokemon data:\n{exc}")
             return
         sim = run_simulations(a, b, chart, n=N_SIMS)
-        make_figure(sim, self.fig)
+        model_p = None
+        try:
+            if not predictor.is_trained():
+                self.status.config(text="Training model (first run, a few seconds)...")
+                self.update_idletasks()
+            model_p = predictor.get_default_predictor().predict_symmetric(a, b)
+        except Exception as exc:  # missing sklearn / validation_data: fall back to raw simulator
+            print(f"Hybrid model unavailable: {exc}")
+        make_figure(sim, self.fig, model_p)
         self.canvas.draw()
         self.status.config(text="Done")
 
@@ -70,8 +79,11 @@ def cli(name_a: str, name_b: str) -> None:
     import matplotlib.pyplot as plt
 
     a, b = data.get_pokemon(name_a), data.get_pokemon(name_b)
-    sim = run_simulations(a, b, data.get_type_chart(), n=N_SIMS)
-    make_figure(sim, plt.figure(figsize=(12, 4.5)))
+    chart = data.get_type_chart()
+    sim = run_simulations(a, b, chart, n=N_SIMS)
+    model_p = predictor.get_default_predictor().predict_symmetric(a, b)
+    print(f"Trained model: {a.name} {100 * model_p:.1f}% | {b.name} {100 * (1 - model_p):.1f}%")
+    make_figure(sim, plt.figure(figsize=(12, 4.5)), model_p)
     plt.show()
 
 

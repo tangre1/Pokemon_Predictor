@@ -10,7 +10,9 @@ COLOR_A = "#e4572e"
 COLOR_B = "#2e86ab"
 
 
-def make_figure(sim: SimulationSummary, fig: Figure | None = None) -> Figure:
+def make_figure(sim: SimulationSummary, fig: Figure | None = None,
+                model_p: float | None = None) -> Figure:
+    """model_p: trained hybrid model's P(first Pokemon wins), shown in the figure title."""
     fig = fig or Figure(figsize=(12, 4.5))
     fig.clear()
     ax1, ax2, ax3 = fig.subplots(1, 3)
@@ -52,5 +54,8 @@ def make_figure(sim: SimulationSummary, fig: Figure | None = None) -> Figure:
     ax3.set_title("Sample battle")
     ax3.legend()
 
+    if model_p is not None:
+        fig.suptitle(f"Trained model: {a} {100 * model_p:.0f}% vs {b} {100 * (1 - model_p):.0f}%"
+                     "  (raw simulator in the left panel is overconfident)", fontsize=11)
     fig.tight_layout()
     return fig
