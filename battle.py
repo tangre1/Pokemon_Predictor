@@ -1,10 +1,9 @@
-"""Battle engine: Pokemon class, damage model, and Monte Carlo simulation.
+"""Simulate battles using Pokemon stats and type matchups.
 
-Simplified model (documented so the group can refine it later):
-  * Level 50, one attack per turn, base power 80.
-  * Each Pokemon uses its own type with the best matchup (always gets STAB).
-  * Physical vs. special is chosen by whichever offensive stat is higher.
-  * Faster Pokemon moves first; ties are random.
+For now, everyone is level 50 and gets one attack per turn with 80 base power.
+Each Pokemon picks its own type with the best matchup, so it always gets STAB.
+It uses physical or special attacks based on which attack stat is higher.
+The faster Pokemon goes first, with a random pick if their speeds match.
 """
 from __future__ import annotations
 
@@ -16,7 +15,7 @@ MOVE_POWER = 80
 STAB = 1.5
 MAX_TURNS = 100
 
-# chart: {attacking_type: {"double": set, "half": set, "no": set}}
+# Each attack type has sets of types it does double, half, or no damage to.
 TypeChart = dict[str, dict[str, set[str]]]
 
 
@@ -34,11 +33,11 @@ class Pokemon:
 
 @dataclass
 class BattleResult:
-    winner: str | None  # None means draw/stalemate
-    winner_idx: int | None  # 0 = first Pokemon, 1 = second, None = draw (safe for mirror matches)
+    winner: str | None  # None if nobody wins
+    winner_idx: int | None  # 0 for first, 1 for second, None for a draw, even with matching names
     turns: int
-    hp_left_pct: float  # winner's remaining HP as a fraction of max
-    history: list[tuple[int, int]] = field(default_factory=list)  # (hp_a, hp_b) per turn
+    hp_left_pct: float  # fraction of the winner's full HP left, not a percentage
+    history: list[tuple[int, int]] = field(default_factory=list)  # both HP values at the start and after each turn
 
 
 def effectiveness(move_type: str, defender_types: tuple[str, ...], chart: TypeChart) -> float:
@@ -55,7 +54,7 @@ def effectiveness(move_type: str, defender_types: tuple[str, ...], chart: TypeCh
 
 
 def best_attack(attacker: Pokemon, defender: Pokemon, chart: TypeChart) -> tuple[float, int, int]:
-    """Return (type multiplier incl. STAB, attack stat, defense stat)."""
+    """Pick the best attack and return its multiplier (with STAB), attack, and defense stats."""
     eff = max(effectiveness(t, defender.types, chart) for t in attacker.types)
     if attacker.attack >= attacker.sp_attack:
         return eff * STAB, attacker.attack, defender.defense
@@ -73,7 +72,7 @@ def calc_damage(attacker: Pokemon, defender: Pokemon, chart: TypeChart, rng: ran
 def simulate_battle(a: Pokemon, b: Pokemon, chart: TypeChart, rng: random.Random) -> BattleResult:
     history = [(a.hp, b.hp)]
     turns = 0
-    fighters = [a, b]  # tracked by index so mirror matches (same name) work
+    fighters = [a, b]  # use positions so two Pokemon with the same name still work
     hps = [a.hp, b.hp]
 
     while turns < MAX_TURNS and hps[0] > 0 and hps[1] > 0:
@@ -106,7 +105,7 @@ class SimulationSummary:
     wins_b: int
     draws: int
     turns: list[int]
-    hp_left_a: list[float]  # remaining HP fraction in battles A won
+    hp_left_a: list[float]  # fraction of HP left each time A wins
     hp_left_b: list[float]
     sample_history: list[tuple[int, int]]
 

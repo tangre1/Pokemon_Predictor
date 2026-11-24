@@ -1,4 +1,4 @@
-"""Turns a SimulationSummary into a matplotlib Figure (3 panels)."""
+"""Plot the simulation results in three charts."""
 from __future__ import annotations
 
 import numpy as np
@@ -12,13 +12,13 @@ COLOR_B = "#2e86ab"
 
 def make_figure(sim: SimulationSummary, fig: Figure | None = None,
                 model_p: float | None = None) -> Figure:
-    """model_p: trained hybrid model's P(first Pokemon wins), shown in the figure title."""
+    """If model_p is given, show the model's win chance for the first Pokemon in the title."""
     fig = fig or Figure(figsize=(12, 4.5))
     fig.clear()
     ax1, ax2, ax3 = fig.subplots(1, 3)
     a, b = sim.a.name.title(), sim.b.name.title()
 
-    # 1) Win probability
+    # how often each Pokemon won
     pct = [100 * sim.wins_a / sim.n, 100 * sim.wins_b / sim.n]
     labels, colors = [a, b], [COLOR_A, COLOR_B]
     if sim.draws:
@@ -31,7 +31,7 @@ def make_figure(sim: SimulationSummary, fig: Figure | None = None,
     ax1.set_ylabel("Win probability (%)")
     ax1.set_title(f"Outcome of {sim.n:,} simulated battles")
 
-    # 2) Remaining HP distribution for winners
+    # how much HP the winners had left
     bins = np.linspace(0, 1, 11)
     if sim.hp_left_a:
         ax2.hist(sim.hp_left_a, bins=bins, alpha=0.7, color=COLOR_A, label=f"{a} wins")
@@ -42,7 +42,7 @@ def make_figure(sim: SimulationSummary, fig: Figure | None = None,
     ax2.set_title("How close are the wins?")
     ax2.legend()
 
-    # 3) One sample battle
+    # follow the HP changes from one battle
     turns = range(len(sim.sample_history))
     ax3.plot(turns, [h[0] / sim.a.hp * 100 for h in sim.sample_history],
              color=COLOR_A, marker="o", label=a)

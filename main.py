@@ -1,7 +1,7 @@
-"""Pokemon Battle Outcome Visualizer.
+"""Open the app and compare two Pokemon.
 
-GUI:  python main.py
-CLI:  python main.py pikachu charizard      (opens a matplotlib window)
+Run python main.py for the GUI, or python main.py pikachu charizard
+to pick the Pokemon from the command line and open their charts.
 """
 from __future__ import annotations
 
@@ -28,7 +28,7 @@ class App(tk.Tk):
 
         try:
             names = data.get_pokemon_names()
-        except Exception as exc:  # network problems, etc.
+        except Exception as exc:  # still open the app if fetching names fails
             messagebox.showerror("Could not reach PokeAPI", str(exc))
             names = []
 
@@ -68,7 +68,7 @@ class App(tk.Tk):
                 self.status.config(text="Training model (first run, a few seconds)...")
                 self.update_idletasks()
             model_p = predictor.get_default_predictor().predict_symmetric(a, b)
-        except Exception as exc:  # missing sklearn / validation_data: fall back to raw simulator
+        except Exception as exc:  # just show the simulator results if the model fails
             print(f"Hybrid model unavailable: {exc}")
         make_figure(sim, self.fig, model_p)
         self.canvas.draw()

@@ -1,6 +1,7 @@
-"""Data layer: pulls Pokemon and type-chart data from PokeAPI (https://pokeapi.co).
+"""Get Pokemon stats and type matchups from PokeAPI (https://pokeapi.co).
 
-Everything is cached in memory only (the proposal says no loading/saving to disk).
+Keep fetched data in memory so repeat requests don't hit the API again.
+Nothing here gets saved to disk, as required by the proposal.
 """
 from __future__ import annotations
 

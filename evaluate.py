@@ -1,20 +1,17 @@
-"""Validation harness: score the predictors against labeled real battles.
+"""Check how well the predictions match the winners in the dataset.
 
-Data: the Kaggle "Pokemon Challenge" (Weedle's Cave) dataset, ~50,000 labeled
-battles, bundled in validation_data/ so this runs offline.
+The data is from Kaggle's "Pokemon Challenge" by Weedle's Cave. There are about
+50,000 battles in validation_data/, so this can run without an internet connection.
 
-    python evaluate.py                          # 2000 test battles, 10000 train
-    python evaluate.py --battles 5000 --train 20000 --sims 50
-    python evaluate.py --no-ml                  # only the speed rule + raw simulator
+Run python evaluate.py for 2,000 test battles and 10,000 training battles.
+For a bigger run, try python evaluate.py --battles 5000 --train 20000 --sims 50.
+Use --no-ml to check just the speed rule and simulator.
 
-Models compared (all scored on the same held-out battles; no training pair
-appears in the test set, in either slot order):
-  * speed rule            - "faster Pokemon wins" (trivial baseline)
-  * simulator (raw)       - Monte Carlo win rate from battle.py
-  * simulator (calibrated)- the same, passed through Platt scaling fit on training data
-  * stats only (GBM)      - gradient boosting on stats/type features, no simulator
-  * hybrid (sim + stats)  - gradient boosting that also sees the simulator output
-Simulator draws count as 0.5 win probability for each side.
+This compares picking the faster Pokemon, the simulator by itself, and the
+simulator with its probabilities adjusted using the training data. It also checks
+gradient boosting with just stats and types, then with simulator results added.
+All models use the same test battles. Test matchups stay out of training even
+when the Pokemon are listed in reverse order. Draws count as half a win per side.
 """
 from __future__ import annotations
 
@@ -28,7 +25,7 @@ from predictor import (FEATURE_NAMES, HybridPredictor, SimCalibrator, feature_ma
 
 
 def metrics(p: np.ndarray, y: np.ndarray) -> dict:
-    """p = P(first pokemon wins), y = 1 if first pokemon won."""
+    """p is the first Pokemon's predicted win chance; y is 1 if it actually won."""
     pc = np.clip(p, 1e-3, 1 - 1e-3)
     pred = np.where(p > 0.5, 1, np.where(p < 0.5, 0, -1))  # exact ties count as wrong
     return {
@@ -62,7 +59,7 @@ def main() -> None:
     mons, combats, chart = load_dataset()
     test = combats.sample(n=min(args.battles, len(combats)), random_state=args.seed)
 
-    # Training pool: drop any battle whose pair (in either order) is in the test set.
+    # Keep test matchups out of training, including ones with the Pokemon swapped.
     test_pairs = set(zip(test["First_pokemon"], test["Second_pokemon"]))
     test_pairs |= {(b, a) for a, b in test_pairs}
     pool = combats.drop(test.index)

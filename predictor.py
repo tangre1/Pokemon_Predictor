@@ -1,13 +1,12 @@
-"""Hybrid win-probability model: simulator output + stats -> trained classifier.
+"""Use the simulator results and Pokemon stats together to predict who wins.
 
-Why: the raw Monte Carlo simulator is overconfident (it says 0% or 100% for ~95% of
-matchups) and ignores how decisive speed is in the labeled battle data.  Here the
-simulator becomes one *feature* (its win rate and average battle length) alongside
-stat differences and type effectiveness, and a gradient-boosting model learns how
-much to trust each from ~10,000 real labeled battles.
+The simulator alone gives 0% or 100% for about 95% of matchups and misses how
+important speed is in the dataset. The model learns from the simulator's win
+rate and battle length, plus stats and type matchups, instead of just trusting
+the simulation.
 
-Training data: validation_data/ (Kaggle "Pokemon Challenge" battles).  Everything
-is kept in memory; nothing is written to disk.
+By default, it trains on 10,000 battles from Kaggle's "Pokemon Challenge" in
+validation_data/. The trained model stays in memory, not in a saved file.
 """
 from __future__ import annotations
 
@@ -30,14 +29,14 @@ FEATURE_NAMES = (
 )
 
 
-# ---------------------------------------------------------------- dataset helpers
+# loading the battle data
 def load_dataset():
-    """Return (pokemon_df indexed 1..800, combats_df, type_chart)."""
+    """Load the Pokemon table, battles, and type chart, with Pokemon IDs starting at 1."""
     mons = pd.read_csv(DATA_DIR / "pokemon.csv")
     combats = pd.read_csv(DATA_DIR / "combats.csv")
     raw = json.loads((DATA_DIR / "typechart.json").read_text())
     chart = {t: {k: set(v) for k, v in rel.items()} for t, rel in raw.items()}
-    mons.index = mons.index + 1  # battle ids are 1-based row positions
+    mons.index = mons.index + 1  # battle IDs start at 1, not 0
     combats["y"] = (combats["Winner"] == combats["First_pokemon"]).astype(int)
     return mons, combats, chart
 
@@ -53,7 +52,7 @@ def to_pokemon(row) -> Pokemon:
     )
 
 
-# ---------------------------------------------------------------- features
+# inputs for the model
 def pair_features(a: Pokemon, b: Pokemon, chart: TypeChart, sims: int = 50, seed: int = 0) -> np.ndarray:
     s = run_simulations(a, b, chart, n=sims, seed=seed)
     sim_p = (s.wins_a + 0.5 * s.draws) / s.n
@@ -66,7 +65,7 @@ def pair_features(a: Pokemon, b: Pokemon, chart: TypeChart, sims: int = 50, seed
 
 
 def feature_matrix(pairs, chart: TypeChart, sims: int = 50, seed: int = 0) -> np.ndarray:
-    """pairs: iterable of (Pokemon, Pokemon). Identical pairs are computed once."""
+    """Build the inputs for each Pokemon pair, reusing results for repeated pairs."""
     cache: dict[tuple[Pokemon, Pokemon], np.ndarray] = {}
     rows = []
     for a, b in pairs:
@@ -76,9 +75,9 @@ def feature_matrix(pairs, chart: TypeChart, sims: int = 50, seed: int = 0) -> np
     return np.vstack(rows)
 
 
-# ---------------------------------------------------------------- models
+# prediction models
 class SimCalibrator:
-    """Platt scaling: maps the raw simulator win rate to a calibrated probability."""
+    """Use logistic regression to adjust the simulator's overconfident win rates."""
 
     def __init__(self) -> None:
         self.lr = LogisticRegression()
@@ -109,12 +108,12 @@ class HybridPredictor:
         return self.model.predict_proba(X)[:, 1]
 
     def predict(self, a: Pokemon, b: Pokemon) -> float:
-        """P(a beats b)."""
+        """Estimate the chance that a beats b."""
         X = pair_features(a, b, self.chart, self.sims, self.seed).reshape(1, -1)
         return float(self.predict_features(X)[0])
 
     def predict_symmetric(self, a: Pokemon, b: Pokemon) -> float:
-        """Average P(a wins) over both slot orderings, removing the dataset's first-slot bias."""
+        """Try both orders and average so being listed first doesn't give an advantage."""
         return 0.5 * (self.predict(a, b) + (1.0 - self.predict(b, a)))
 
 
@@ -126,7 +125,7 @@ def is_trained() -> bool:
 
 
 def get_default_predictor(n_train: int = 10000, sims: int = 30, seed: int = 0) -> HybridPredictor:
-    """Train once (a few seconds) from validation_data/ and keep in memory."""
+    """Train on validation_data/ the first time, then reuse the model."""
     global _default
     if _default is None:
         mons, combats, chart = load_dataset()
